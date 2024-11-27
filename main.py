@@ -1,8 +1,24 @@
 import requests
 import flet as ft
 
+# 地域ごとのコードを設定
+REGIONS = {
+    "北海道地方": "010100",
+    "東北地方": "010200",
+    "関東甲信地方": "010300",
+    "東海地方": "010400",
+    "北陸地方": "010500",
+    "近畿地方": "010600",
+    "中国地方 (山口県を除く)": "010700",
+    "四国地方": "010800",
+    "九州地方": "010900",
+    "沖縄地方": "011000",
+}
+
 def get_weather_forecast(region_code):
+    # 指定された地域の天気予報データを取得
     url = f"https://www.jma.go.jp/bosai/forecast/data/forecast/{region_code}.json"
+    # リクエストを送信
     response = requests.get(url)
     if response.status_code == 200:
         # レスポンスデータを取得
@@ -21,20 +37,45 @@ def get_weather_forecast(region_code):
         return None
 
 def main(page: ft.Page):
-    def search_weather(e):
-        area_code = area_code_input.value
-        forecast = get_weather_forecast(area_code)
-        if forecast:
-            result.value = forecast
-        else:
-            result.value = "天気予報を取得できませんでした。"
-        page.update()
+    page.title = "天気予報検索"
+    # ページの配置を設定
+    page.horizontal_alignment = ft.CrossAxisAlignment.START
+    page.vertical_alignment = ft.MainAxisAlignment.START
 
-    area_code_input = ft.TextField(label="地域コードを入力")
-    search_button = ft.ElevatedButton(text="検索", on_click=search_weather)
-    result = ft.Text()
+# 選択された地域コードを保持
+    selected_region_code = ft.Text(value="", visible=False)
 
-    page.add(area_code_input, search_button, result)
+    # 天気予報表示用テキスト
+    weather_info = ft.Text(value="地域を選択してください", size=16)
+
+    # ドロップダウンリストの作成
+    dropdown = ft.Dropdown(
+        hint_text="地域を選択",
+        options=[
+            ft.dropdown.Option(text=name, key=code) for name, code in REGIONS.items()
+        ],
+        on_change=lambda e: update_weather(e.control.value),
+    )
+
+    # 天気情報を更新する関数
+    def update_weather(region_code):
+        if region_code:
+            selected_region_code.value = region_code
+            weather_info.value = get_weather_forecast(region_code)
+            page.update()
+
+    # レイアウトを構築
+    page.add(
+        ft.Column(
+            [
+                ft.Text("天気予報", size=24, weight="bold"),
+                dropdown,
+                ft.Container(weather_info, padding=20, bgcolor=ft.colors.BLUE_50),
+            ],
+            spacing=20,
+        )
+    )
+
 
 # アプリを起動
 ft.app(target=main)
