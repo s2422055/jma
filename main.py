@@ -1,40 +1,93 @@
+import json
 import requests
 import flet as ft
+import os
+
+# Set the relative path to the JSON file
+json_file_path = os.path.join(os.getcwd(), "jma", "areas.json")
+
+# Load the region data from the uploaded JSON file
+with open(json_file_path, "r", encoding="utf-8") as file:
+    region_data = json.load(file)
+
+# Extract the region names and codes for the initial dropdown
+REGIONS = {region_data["centers"][code]["name"]: code for code in region_data["centers"]}
 
 def get_weather_forecast(region_code):
+    # Fetch weather forecast for the given region code
     url = f"https://www.jma.go.jp/bosai/forecast/data/forecast/{region_code}.json"
-    response = requests.get(url)
-    if response.status_code == 200:
-        # レスポンスデータを取得
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+
         data = response.json()
-        # 地域名と天気情報を取得
         area_name = data[0]["timeSeries"][0]["areas"][0]["area"]["name"]
-        # 発表日時を取得
         report_datetime = data[0]["reportDatetime"]
-        # 天気情報を取得
         weather_forecast = data[0]["timeSeries"][0]["areas"][0]["weathers"]
-        # 天気情報を整形して返す
+
         formatted_forecast = f"発表機関: 気象庁\n発表日時: {report_datetime}\n{area_name} の天気予報:\n"
         formatted_forecast += "\n".join([f"- {weather}" for weather in weather_forecast])
         return formatted_forecast
-    else:
-        return None
 
-def main(page: ft.Page):
-    def search_weather(e):
-        area_code = area_code_input.value
-        forecast = get_weather_forecast(area_code)
-        if forecast:
-            result.value = forecast
-        else:
-            result.value = "天気予報を取得できませんでした。"
+    except requests.Timeout:
+        return "リクエストがタイムアウトしました。再度試してください。"
+    except requests.RequestException as e:
+        return f"天気予報の取得に失敗しました: {e}"
+
+def update_weather(region_code, weather_info, page):
+    if region_code:
+        # Update the weather forecast display
+        weather_info.value = get_weather_forecast(region_code)
         page.update()
 
-    area_code_input = ft.TextField(label="地域コードを入力")
-    search_button = ft.ElevatedButton(text="検索", on_click=search_weather)
-    result = ft.Text()
+def update_children(region_code, dropdown_children, page):
+    # Get the children (sub-regions) for the selected region
+    children = region_data["centers"].get(region_code, {}).get("children", [])
+    dropdown_children.options = [ft.dropdown.Option(text=f"{child} 地域", key=child) for child in children]
+    page.update()
 
-    page.add(area_code_input, search_button, result)
+def main(page: ft.Page):
+    page.title = "天気予報検索"
+    page.horizontal_alignment = ft.CrossAxisAlignment.START
+    page.vertical_alignment = ft.MainAxisAlignment.START
 
-# アプリを起動
+    # Text box for displaying weather info
+    weather_info = ft.Text(value="地域を選択してください", size=16)
+
+    # Dropdown for selecting a region
+    dropdown = ft.Dropdown(
+        hint_text="地域を選択",
+        options=[ft.dropdown.Option(text=name, key=code) for name, code in REGIONS.items()],
+        on_change=lambda e: update_children(e.control.value, dropdown_children, page)
+    )
+
+    # Dropdown for selecting sub-regions (children)
+    dropdown_children = ft.Dropdown(hint_text="サブ地域を選択")
+    dropdown_children.on_change = lambda e: update_weather(e.control.value, weather_info, page)
+
+    # Layout structure
+    page.add(
+        ft.Column(
+            [
+                ft.Container(
+                    ft.Text("天気予報", size=24, weight="bold", color=ft.colors.WHITE),
+                    padding=20,
+                    bgcolor=ft.colors.BLUE,
+                    alignment=ft.alignment.center_left,
+                ),
+                dropdown,
+                dropdown_children,
+                ft.Container(
+                    content=weather_info,
+                    padding=20,
+                    bgcolor=ft.colors.BLUE_50,
+                    border_radius=ft.border_radius.all(8),
+                ),
+            ],
+            spacing=20,
+            width=600,
+        )
+    )
+
+# Run the application
 ft.app(target=main)
