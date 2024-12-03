@@ -4,14 +4,14 @@ import flet as ft
 import os
 
 # Set the relative path to the JSON file
-json_file_path = os.path.join(os.getcwd(), "jma", "areas.json")
+json_file_path = os.path.join("jma", "areas.json")
 
 # Load the region data from the uploaded JSON file
 with open(json_file_path, "r", encoding="utf-8") as file:
     region_data = json.load(file)
 
 # Extract the region names and codes for the initial dropdown
-REGIONS = {region_data["centers"][code]["name"]: code for code in region_data["centers"]}
+REGIONS = {region["name"]: region_code for region_code, region in region_data["centers"].items()}
 
 def get_weather_forecast(region_code):
     # Fetch weather forecast for the given region code
@@ -36,14 +36,28 @@ def get_weather_forecast(region_code):
 
 def update_weather(region_code, weather_info, page):
     if region_code:
-        # Update the weather forecast display
-        weather_info.value = get_weather_forecast(region_code)
+        # サブ地域の名前を取得
+        region_name = next(
+            (region["name"] for region in region_data["centers"].values() if region_code in region["children"]),
+            "不明な地域"
+        )
+
+        # 天気予報情報を取得
+        weather_forecast = get_weather_forecast(region_code)
+
+        # 天気情報を表示
+        weather_info.value = f"地域: {region_name}\n\n{weather_forecast}"
         page.update()
 
 def update_children(region_code, dropdown_children, page):
-    # Get the children (sub-regions) for the selected region
+    # 子地域を取得
     children = region_data["centers"].get(region_code, {}).get("children", [])
-    dropdown_children.options = [ft.dropdown.Option(text=f"{child} 地域", key=child) for child in children]
+
+    # 子地域のオプションを設定
+    dropdown_children.options = [
+        ft.dropdown.Option(text=f"{region_data['offices'].get(child, {}).get('name', child)} 地域", key=child)
+        for child in children
+    ]
     page.update()
 
 def main(page: ft.Page):
